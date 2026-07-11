@@ -25,7 +25,7 @@ class WorkspaceManager:
 
     def list_files(self, workspace: Path) -> list[str]:
         return sorted(
-            str(path.relative_to(workspace))
+            path.relative_to(workspace).as_posix()
             for path in workspace.rglob("*")
             if path.is_file()
         )
