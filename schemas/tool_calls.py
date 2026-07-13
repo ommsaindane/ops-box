@@ -1,4 +1,5 @@
 from enum import Enum
+
 from pydantic import BaseModel
 
 
@@ -18,6 +19,15 @@ class ReadFileArgs(BaseModel):
     path: str
 
 
+class InstallPackageArgs(BaseModel):
+    package: str
+
+
 class ToolCall(BaseModel):
     tool: ToolName
     arguments: dict
+
+
+class ToolCalls(BaseModel):
+    tools: list[ToolCall]
+
