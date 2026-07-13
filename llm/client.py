@@ -2,12 +2,14 @@ from ollama import Client
 
 from schemas.tool_calls import ToolCalls
 
+from config import MODEL_NAME, OLLAMA_HOST
+
 
 class LLMClient:
     def __init__(
         self,
-        model: str = "qwen2.5-coder:7b",
-        host: str = "http://localhost:11434",
+        model: str = MODEL_NAME,
+        host: str = OLLAMA_HOST,
         client: Client | None = None,
     ):
         self.model = model

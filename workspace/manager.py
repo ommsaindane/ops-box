@@ -1,9 +1,11 @@
 from pathlib import Path
 import shutil
 
+from config import WORKSPACE_ROOT
+
 
 class WorkspaceManager:
-    def __init__(self, root: Path | str = "workspace"):
+    def __init__(self, root: Path | str = WORKSPACE_ROOT):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
 

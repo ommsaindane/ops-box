@@ -6,18 +6,24 @@ from docker.errors import DockerException
 
 from schemas.execution import ExecutionResult
 
+from config import (
+    CPU_QUOTA,
+    DOCKER_IMAGE,
+    EXECUTION_TIMEOUT,
+    MEMORY_LIMIT,
+)
+
 
 class DockerRunner:
     def __init__(
         self,
         client: DockerClient | None = None,
-        image: str = "python:3.11-slim",
-        memory_limit: str = "512m",
-        cpu_quota: int = 50000,
-        timeout: int = 30,
+        image: str = DOCKER_IMAGE,
+        memory_limit: str = MEMORY_LIMIT,
+        cpu_quota: int = CPU_QUOTA,
+        timeout: int = EXECUTION_TIMEOUT,
     ):
         self.client = client or docker.from_env()
-
         self.image = image
         self.memory_limit = memory_limit
         self.cpu_quota = cpu_quota
