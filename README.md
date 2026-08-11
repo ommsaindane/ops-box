@@ -14,7 +14,7 @@ An autonomous development sandbox that generates Python projects with an LLM, va
 
 
 <img width="1918" height="898" alt="Image" src="https://github.com/user-attachments/assets/e0123e26-6b6b-41f7-9685-1383d7f7fb3b" />
-
+<img width="1918" height="936" alt="Image" src="https://github.com/user-attachments/assets/ca7f98e5-6fd5-4ac9-a2ab-5d26e057c2ed" />
 
 ---
 
