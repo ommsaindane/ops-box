@@ -6,15 +6,13 @@ An autonomous development sandbox that generates Python projects with an LLM, va
 
 ## Architecture
 
-<img width="1042" height="842" alt="Image" src="https://github.com/user-attachments/assets/42310077-0cdf-412c-b40a-a8c0a0a9c74f" />
+<img width="521" height="421" alt="Image" src="https://github.com/user-attachments/assets/42310077-0cdf-412c-b40a-a8c0a0a9c74f" />
 
 ---
 
 ## Example Output
 
-
-<img width="1918" height="898" alt="Image" src="https://github.com/user-attachments/assets/e0123e26-6b6b-41f7-9685-1383d7f7fb3b" />
-<img width="1918" height="936" alt="Image" src="https://github.com/user-attachments/assets/ca7f98e5-6fd5-4ac9-a2ab-5d26e057c2ed" />
+<img width="960" and height="540" alt="12fps" src="https://github.com/user-attachments/assets/9c747f04-8122-4317-9aef-0f052d2f7945"/>
 
 ---
 
@@ -25,6 +23,8 @@ An autonomous development sandbox that generates Python projects with an LLM, va
 - [Getting Started](#getting-started)
 - [Usage](#usage)
 - [Design Decisions](#design-decisions)
+- [Testing](#testing)
+- [Limitations](#limitations)
 - [Roadmap](#roadmap)
 - [Tech Stack](#tech-stack)
 - [Motivation](#motivation)
@@ -33,18 +33,24 @@ An autonomous development sandbox that generates Python projects with an LLM, va
 
 # Features
 
-- Structured LLM outputs using Pydantic schemas
-- FastAPI REST API
+- Structured LLM outputs using tool-calling schemas
+- FastAPI asynchronous REST API with background task execution
+- Real-time step and execution streaming via Server-Sent Events (SSE)
+- Minimal Streamlit web interface for task visualization
 - Secure Docker sandbox execution
-- Workspace isolation for generated projects
-- Automatic retry using runtime feedback
-- Docker resource constraints
-    - Memory limit
+- Path traversal defense and automatic TTL garbage collection for workspaces
+- Automatic retry and self-healing using runtime execution feedback
+- Universal LLM provider support (local Ollama or free cloud inference via Groq)
+- Docker resource and security constraints
+    - Memory limit and disabled swap
     - CPU quota
-    - Network disabled
-- Typed request and response models
-- Modular architecture with dependency injection
-- Pytest test suite
+    - Network disabled by default
+    - Dropped kernel capabilities (`ALL`)
+    - Non-root user execution (`1000:1000`)
+    - Process limits (`pids_limit`)
+    - No new privileges flag
+- Deterministic circuit breakers and step limits
+- Pytest test suite with async mocking
 
 ---
 
@@ -62,8 +68,10 @@ ops-box/
 ├── tests/
 │
 ├── app.py
+├── ui.py
 ├── config.py
 └── README.md
+
 ```
 
 ---
@@ -72,17 +80,38 @@ ops-box/
 
 ## Prerequisites
 
-- Python 3.11+
-- Docker Desktop
-- Ollama
-- Git
+* Python 3.11+
+* Docker Desktop
+* Ollama or a Groq API Key
+* Git
+
+### Using Local Ollama
 
 Install and start Ollama.
 
-Pull the model used by the project.
+Pull the model used by the project:
 
 ```bash
 ollama pull qwen2.5-coder:7b
+
+```
+
+### Using Groq Cloud
+
+Export your Groq API key:
+
+Windows (PowerShell)
+
+```powershell
+$env:GROQ_API_KEY="gsk_your_key_here"
+
+```
+
+Linux/macOS
+
+```bash
+export GROQ_API_KEY="gsk_your_key_here"
+
 ```
 
 ---
@@ -92,42 +121,27 @@ ollama pull qwen2.5-coder:7b
 Clone the repository.
 
 ```bash
-git clone https://github.com/<your-username>/ops-box.git
+git clone [https://github.com/](https://github.com/)<your-username>/ops-box.git
+
 ```
 
-Enter the project.
 
-```bash
-cd ops-box
-```
-
-Create a virtual environment.
+Create a virtual environment and activate it.
 
 ```bash
 python -m venv .venv
+
 ```
 
-Activate it.
-
-Windows
-
-```bash
-.venv\Scripts\activate
-```
-
-Linux/macOS
-
-```bash
-source .venv/bin/activate
-```
 
 Install dependencies.
 
 ```bash
-pip install -r requirements.txt
+pip install .
+
 ```
 
-Ensure Docker Desktop and Ollama are running.
+Ensure Docker Desktop is running.
 
 ---
 
@@ -137,36 +151,59 @@ Start the API.
 
 ```bash
 uvicorn app:app --reload
-```
-
-Open
 
 ```
-http://127.0.0.1:8000/docs
+
+Start the Streamlit dashboard in a separate terminal.
+
+```bash
+streamlit run ui.py
+
+```
+
+Open the API documentation.
+
+```
+[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+```
+
+Or open the web dashboard.
+
+```
+[http://127.0.0.1:8501](http://127.0.0.1:8501)
+
 ```
 
 Example request
 
 ```json
+POST /api/v1/tasks
 {
-    "prompt": "Write a Python script that prints the first 20 Fibonacci numbers."
+    "instruction": "Write a Python script that calculates the first 10 Fibonacci numbers and saves them to fib.json. Verify the file and finish the task."
 }
+
 ```
 
-Example response
+Example response (`202 Accepted`)
 
 ```json
 {
-    "success": true,
-    "attempts": 1,
-    "execution": {
-        "success": true,
-        "exit_code": 0,
-        "stdout": "...",
-        "stderr": "",
-        "error": null
-    }
+    "task_id": "d97773ef3cd94b848e869e171caee0e9",
+    "status": "pending",
+    "summary": null,
+    "total_duration_seconds": null,
+    "error": null,
+    "step_count": 0
 }
+
+```
+
+Stream execution events in real time.
+
+```bash
+GET /api/v1/tasks/{task_id}/events
+
 ```
 
 ---
@@ -175,9 +212,9 @@ Example response
 
 ## Structured Tool Calls
 
-The LLM never writes directly to the filesystem.
+The LLM never writes directly to the host filesystem.
 
-Instead, every action is validated using Pydantic before execution.
+Instead, every action is validated as a structured function call (`write_file`, `read_file`, `list_files`, `run_command`, `finish_task`) before execution.
 
 ---
 
@@ -187,16 +224,27 @@ All generated code executes inside an isolated Docker container rather than on t
 
 Security measures include:
 
-- Disabled networking
-- Memory limits
-- CPU quota
-- Automatic container cleanup
+* Disabled networking (`network_mode="none"`)
+* Hard memory limits and disabled swap
+* CPU quotas
+* PID limits to prevent fork bombs
+* Dropped kernel capabilities (`ALL`)
+* Non-root execution
+* Automatic container cleanup on timeout or completion
+
+---
+
+## Asynchronous Execution Lifecycle
+
+Long-running agent workflows are detached from standard request lifecycles.
+
+Tasks are accepted immediately (`202 Accepted`) and handled by background workers, while incremental thought traces and command outputs are streamed to clients via Server-Sent Events (SSE).
 
 ---
 
 ## Execution Feedback Loop
 
-If execution fails, the runtime output is sent back to the model.
+If execution fails, the runtime output and exit codes are sent back to the model.
 
 ```
 Generate Code
@@ -210,9 +258,10 @@ Success?
  Yes      No
   │        │
  Return  Retry
+
 ```
 
-This allows the agent to automatically repair simple runtime errors.
+This allows the agent to automatically repair simple runtime errors and verify its own work.
 
 ---
 
@@ -222,14 +271,16 @@ Run the full test suite.
 
 ```bash
 pytest -v
+
 ```
 
 Individual test files can also be executed.
 
 ```bash
-pytest tests/workspacetest.py
-pytest tests/docker_test.py
-pytest tests/orchestrator_test.py
+pytest tests/test_workspace.py
+pytest tests/test_orchestrator.py
+pytest tests/test_api.py
+
 ```
 
 ---
@@ -244,25 +295,26 @@ Interactive CLI applications, GUI applications, and long-running services are ou
 
 # Roadmap
 
-- Improved execution verification strategies
-- Project download endpoint
-- Rich execution logs
-- Support for additional programming languages
-- Container image caching
-- Better retry prompting
-- Configurable execution commands
+* Support for additional programming languages
+* Project artifact download endpoint
+* Container image pre-warming and pooling
+* Multi-container network topologies for distributed services
+* Token budget calculation and tracking per session
+* Configurable base images per task
 
 ---
 
 # Tech Stack
 
 | Component | Technology |
-|-----------|------------|
+| --- | --- |
 | API | FastAPI |
-| LLM | Ollama |
+| Dashboard | Streamlit |
+| Streaming | Server-Sent Events (SSE) |
+| LLM | Ollama / Groq |
 | Validation | Pydantic |
 | Sandbox | Docker SDK |
-| Testing | Pytest |
+| Testing | Pytest / pytest-asyncio |
 | Language | Python 3.11 |
 
 ---
@@ -272,3 +324,5 @@ Interactive CLI applications, GUI applications, and long-running services are ou
 The objective of Ops-Box is not to replace existing coding assistants, but to implement the execution infrastructure required by autonomous development agents.
 
 The project demonstrates structured LLM interaction, secure code execution, execution-driven self-correction, and clean backend architecture using production-oriented engineering practices.
+
+```
